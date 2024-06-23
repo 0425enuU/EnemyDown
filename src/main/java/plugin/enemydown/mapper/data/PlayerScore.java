@@ -11,7 +11,8 @@ import lombok.Setter;
  */
 @Getter
 @Setter
-@NoArgsConstructor
+//@NoArgsConstructor
+
 public class PlayerScore {
 
   private int id;
@@ -19,6 +20,10 @@ public class PlayerScore {
   private int score;
   private String difficulty;
   private LocalDateTime registeredAt;
+
+  public PlayerScore(){
+
+  }
 
   public PlayerScore(String playerName, int score, String difficulty) {
     this.playerName = playerName;

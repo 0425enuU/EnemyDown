@@ -1,19 +1,8 @@
 package plugin.enemydown.command;
-
-import java.io.InputStream;
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Statement;
-import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Objects;
-import org.apache.ibatis.io.Resources;
 import org.apache.ibatis.session.SqlSession;
-import org.apache.ibatis.session.SqlSessionFactory;
-import org.apache.ibatis.session.SqlSessionFactoryBuilder;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.entity.Entity;
@@ -34,6 +23,7 @@ import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.potion.PotionEffect;
 import plugin.enemydown.Main;
 import plugin.enemydown.data.ExecutingPlayer;
+import plugin.enemydown.mapper.PlayerScoreData;
 import plugin.enemydown.mapper.PlayerScoreMapper;
 import plugin.enemydown.mapper.data.PlayerScore;
 
@@ -52,56 +42,20 @@ public class EnemyDownCommand extends BaseCommand implements Listener {
   public static final String LIST = "list";
 
   private Main main;
+  private PlayerScoreData playerScoreData = new PlayerScoreData();
+
   private List<ExecutingPlayer> executingPlayerList = new ArrayList<>();
   private List<Entity> spawnEntityList = new ArrayList<>();
 
-  private SqlSessionFactory sqlSessionFactory;
-
   public EnemyDownCommand(Main main){
     this.main = main;
-    try {
-      InputStream inputStream = Resources.getResourceAsStream("mybatis-config.xml");
-      this.sqlSessionFactory = new SqlSessionFactoryBuilder().build(inputStream);
-    } catch (Exception e) {
-      throw new RuntimeException(e);
-    }
   }
 
   @Override
   public boolean onExecutePlayerCommand(Player player,Command command, String label, String[] args) {
+//  最初の引数が「List」だったらスコアを一覧表示して処理を終了する。
     if (args.length == 1 && (LIST.equals(args[0]))) {
-      try(SqlSession session = sqlSessionFactory.openSession()) {
-        PlayerScoreMapper mapper = session.getMapper(PlayerScoreMapper.class);
-        List<PlayerScore> playerScoreList = mapper.selectList();
-
-        for (PlayerScore playerScore : playerScoreList) {
-          player.sendMessage(playerScore.getId() + " | "
-              + playerScore.getPlayerName() + " | "
-              + playerScore.getScore() + " | "
-              + playerScore.getDifficulty() + " | "
-              + playerScore.getRegisteredAt().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")));
-        }
-      }
-
-//      try(Connection con = DriverManager.getConnection(
-//          "jdbc:mysql://localhost:3306/spigot_server",
-//          "root",
-//          "s1005811");
-//          Statement statement = con.createStatement();
-//          ResultSet resultset = statement.executeQuery("select * form player_score;")){
-//        while(resultset.next()){
-//          int id = resultset.getInt("id");
-//          String name = resultset.getString("player_name");
-//          int score = resultset.getInt("score");
-//          String difficulty = resultset.getString("difficulty");
-//
-//
-//
-//
-//        }
-//      } catch (SQLException e) {
-//        e.printStackTrace();
-//      }
+      sendPlayerScoreList(player);
       return false;
     }
     String difficulty = getDifficulty(player, args);
@@ -115,6 +69,27 @@ public class EnemyDownCommand extends BaseCommand implements Listener {
 
     gamePlay(player, nowPlayer, difficulty);
     return false;
+  }
+
+  @Override
+  public boolean onExecuteNPCCommand(CommandSender sender,Command command, String label, String[] args) {
+    return true;
+  }
+
+  /**
+   * 現在登録されているスコアの一覧をメッセージに送る。
+   * @param player プレイヤー
+   */
+
+  private void sendPlayerScoreList(Player player) {
+    List<PlayerScore> playerScoreList = playerScoreData.selectList();
+    for (PlayerScore playerScore : playerScoreList) {
+      player.sendMessage(playerScore.getId() + " | "
+          + playerScore.getPlayerName() + " | "
+          + playerScore.getScore() + " | "
+          + playerScore.getDifficulty() + " | "
+          + playerScore.getRegisteredAt().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")));
+    }
   }
 
   /**
@@ -131,12 +106,6 @@ public class EnemyDownCommand extends BaseCommand implements Listener {
     player.sendMessage(ChatColor.RED + "実行できません。コマンド引数の1つ目に難易度指定が必要です。[easy,normal,hard]");
     return NONE;
   }
-
-  @Override
-  public boolean onExecuteNPCCommand(CommandSender sender,Command command, String label, String[] args) {
-    return true;
-  }
-
 
   /**
    * 現在実行しているプレイヤーのスコア情報を取得する。
@@ -161,9 +130,6 @@ public class EnemyDownCommand extends BaseCommand implements Listener {
     return executingPlayer;
   }
 
-
-
-
   @EventHandler
   public void onEnemyDeath(EntityDeathEvent e) {
 
@@ -187,7 +153,6 @@ public class EnemyDownCommand extends BaseCommand implements Listener {
           player.sendMessage("敵を倒した！現在のスコアは" + p.getScore() + "点！");
         });
   }
-
 
   /**
    * 新規のプレイヤー情報をリストに追加します。
@@ -235,36 +200,16 @@ public class EnemyDownCommand extends BaseCommand implements Listener {
 
         player.sendTitle("ゲームが終了しました", nowExecutingPlayer.getPlayerName() + "合計" + nowExecutingPlayer.getScore() + "点!",0,60,0);
 
-
-
-//        try(Connection con = DriverManager.getConnection(
-//            "jdbc:mysql://localhost:3306/spigot_server",
-//            "root",
-//            "s1005811");
-//            Statement statement = con.createStatement();
-//            ){
-//                  statement.executeUpdate(
-//              "insert player_score(player_name,score,difficulty,registered_at)"
-//                  + "values('" + nowExecutingPlayer.getPlayerName() + "'," + nowExecutingPlayer.getScore() + ",'"
-//                  + difficulty + "', now());");
-//
-//        }catch (SQLException e){
-//          e.printStackTrace();
-//        }
-
         spawnEntityList.forEach(Entity::remove);
         spawnEntityList.clear();
 
         removePotionEffect(player);
 
-//        スコア登録処理
-        try(SqlSession session = sqlSessionFactory.openSession(true)) {
-          PlayerScoreMapper mapper = session.getMapper(PlayerScoreMapper.class);
-          mapper.insert(
-              new PlayerScore(nowExecutingPlayer.getPlayerName()
-                  , nowExecutingPlayer.getScore()
-                  , difficulty));
-        }
+        playerScoreData.insert(
+            new PlayerScore(nowExecutingPlayer.getPlayerName()
+            , nowExecutingPlayer.getScore()
+            , difficulty));
+
         return;
       }
       Entity spawnEntity = player.getWorld().spawnEntity(getEnemySpawnLocation(player), getEnemy(difficulty));
